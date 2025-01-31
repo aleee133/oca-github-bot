@@ -2,9 +2,14 @@
 # Distributed under the MIT License (http://opensource.org/licenses/MIT).
 
 import ast
+import logging
 import os
 import re
+from typing import Tuple
 
+import requests
+
+from . import config
 from .github import git_get_current_branch, github_user_can_push
 from .process import check_call, check_output
 
@@ -17,22 +22,25 @@ MANIFEST_VERSION_RE = re.compile(
     r"(?P<pre>[\"']version[\"']\s*:\s*[\"'])(?P<version>[\d\.]+)(?P<post>[\"'])"
 )
 
+_logger = logging.getLogger(__name__)
+
 
 class NoManifestFound(Exception):
     pass
 
 
 class OdooSeriesNotDetected(Exception):
-    pass
+    def __init__(self, msg=None):
+        super().__init__(msg or "Odoo series could not be detected")
 
 
 def is_addons_dir(addons_dir, installable_only=False):
-    """ Test if an directory contains Odoo addons. """
+    """Test if an directory contains Odoo addons."""
     return any(addon_dirs_in(addons_dir, installable_only))
 
 
 def is_addon_dir(addon_dir, installable_only=False):
-    """ Test if a directory contains an Odoo addon. """
+    """Test if a directory contains an Odoo addon."""
     if not installable_only:
         return bool(get_manifest_path(addon_dir))
     else:
@@ -43,7 +51,7 @@ def is_addon_dir(addon_dir, installable_only=False):
 
 
 def addon_dirs_in(addons_dir, installable_only=False):
-    """ Enumerate addon directories """
+    """Enumerate addon directories"""
     for d in os.listdir(addons_dir):
         addon_dir = os.path.join(addons_dir, d)
         if is_addon_dir(addon_dir, installable_only):
@@ -55,7 +63,7 @@ def get_addon_name(addon_dir):
 
 
 def get_manifest_file_name(addon_dir):
-    """ Return the name of the manifest file, without path """
+    """Return the name of the manifest file, without path"""
     for manifest_name in MANIFEST_NAMES:
         manifest_path = os.path.join(addon_dir, manifest_name)
         if os.path.exists(manifest_path):
@@ -71,17 +79,21 @@ def get_manifest_path(addon_dir):
     return None
 
 
+def parse_manifest(manifest: bytes) -> dict:
+    return ast.literal_eval(manifest.decode("utf-8"))
+
+
 def get_manifest(addon_dir):
     manifest_path = get_manifest_path(addon_dir)
     if not manifest_path:
         raise NoManifestFound(f"no manifest found in {addon_dir}")
-    with open(manifest_path, "r") as f:
-        return ast.literal_eval(f.read())
+    with open(manifest_path, "rb") as f:
+        return parse_manifest(f.read())
 
 
 def set_manifest_version(addon_dir, version):
     manifest_path = get_manifest_path(addon_dir)
-    with open(manifest_path, "r") as f:
+    with open(manifest_path) as f:
         manifest = f.read()
     manifest = MANIFEST_VERSION_RE.sub(r"\g<pre>" + version + r"\g<post>", manifest)
     with open(manifest_path, "w") as f:
@@ -133,7 +145,7 @@ def bump_manifest_version(addon_dir, mode, git_commit=False):
                 "git",
                 "commit",
                 "-m",
-                f"{addon_name} {version}",
+                f"[BOT] {addon_name} {version}",
                 "--",
                 get_manifest_file_name(addon_dir),
             ],
@@ -189,7 +201,11 @@ def git_modified_addons(addons_dir, ref):
 
 def git_modified_addon_dirs(addons_dir, ref):
     modified_addons, other_changes = git_modified_addons(addons_dir, ref)
-    return [os.path.join(addons_dir, addon) for addon in modified_addons], other_changes
+    return (
+        [os.path.join(addons_dir, addon) for addon in modified_addons],
+        other_changes,
+        modified_addons,
+    )
 
 
 def get_odoo_series_from_version(version):
@@ -202,7 +218,7 @@ def get_odoo_series_from_version(version):
     return tuple(int(s) for s in series.split("."))
 
 
-def get_odoo_series_from_branch(branch):
+def get_odoo_series_from_branch(branch) -> Tuple[int, int]:
     mo = BRANCH_RE.match(branch)
     if not mo:
         raise OdooSeriesNotDetected()
@@ -220,11 +236,13 @@ def user_can_push(gh, org, repo, username, addons_dir, target_branch):
     return true if username is declared in the maintainers key
     on the target branch, for all addons modified in the current branch
     compared to the target_branch.
+    If the username is not declared as maintainer on the current branch,
+    check if the user is maintainer in other branches.
     """
     gh_repo = gh.repository(org, repo)
     if github_user_can_push(gh_repo, username):
         return True
-    modified_addon_dirs, other_changes = git_modified_addon_dirs(
+    modified_addon_dirs, other_changes, modified_addons = git_modified_addon_dirs(
         addons_dir, target_branch
     )
     if other_changes or not modified_addon_dirs:
@@ -234,6 +252,42 @@ def user_can_push(gh, org, repo, username, addons_dir, target_branch):
     current_branch = git_get_current_branch(cwd=addons_dir)
     try:
         check_call(["git", "checkout", target_branch], cwd=addons_dir)
-        return is_maintainer(username, modified_addon_dirs)
+        result = is_maintainer(username, modified_addon_dirs)
     finally:
         check_call(["git", "checkout", current_branch], cwd=addons_dir)
+
+    if result:
+        return True
+
+    other_branches = config.MAINTAINER_CHECK_ODOO_RELEASES
+    if target_branch in other_branches:
+        other_branches.remove(target_branch)
+
+    return is_maintainer_other_branches(
+        org, repo, username, modified_addons, other_branches
+    )
+
+
+def is_maintainer_other_branches(org, repo, username, modified_addons, other_branches):
+    for addon in modified_addons:
+        is_maintainer = False
+        for branch in other_branches:
+            manifest_file = (
+                "__openerp__.py" if float(branch) < 10.0 else "__manifest__.py"
+            )
+            url = (
+                f"https://github.com/{org}/{repo}/raw/{branch}/{addon}/{manifest_file}"
+            )
+            _logger.debug("Looking for maintainers in %s" % url)
+            r = requests.get(
+                url, allow_redirects=True, headers={"Cache-Control": "no-cache"}
+            )
+            if r.ok:
+                manifest = parse_manifest(r.content)
+                if username in manifest.get("maintainers", []):
+                    is_maintainer = True
+                    break
+
+        if not is_maintainer:
+            return False
+    return True

@@ -1,3 +1,115 @@
+v20240706
+~~~~~~~~~
+
+**Bugfixes**
+
+- Fix regression in nightly main branch bot. (`#279 <https://github.com/oca/oca-github-bot/issues/279>`_)
+- Upgrade to Python 3.12 (`#293 <https://github.com/oca/oca-github-bot/pull/293>`_)
+- Upgrade sentry client
+- Upgrade to latest OCA/maintainer-tools
+
+
+v20231216
+~~~~~~~~~
+
+**Features**
+
+- Skip fork repos earlier in main branch bot, for better performance in organisations
+  with a large number of forks. (`#277 <https://github.com/oca/oca-github-bot/issues/277>`_)
+- Support generating ``pyproject.toml`` instead of ``setup.py`` (`#266 <https://github.com/oca/oca-github-bot/issues/266>`_)
+- Upgraded maintainer-tools (`#275 <https://github.com/oca/oca-github-bot/issues/275>`_)
+- Look for migration issues in all states in ``/ocabot migration`` command (`#216 <https://github.com/OCA/oca-github-bot/pull/216>`_)
+
+**Bugfixes**
+
+- Start wheel build from an empty directory, to avoid accidentally importing
+  python files from the addon root directory during the build process. (`#270 <https://github.com/oca/oca-github-bot/issues/270>`_)
+- Fixed rendering of OdooSeriesNotFound exceptions (`#274 <https://github.com/oca/oca-github-bot/issues/274>`_)
+
+
+v20231013
+~~~~~~~~~
+
+**Features**
+
+- Add ``MAIN_BRANCH_BOT_MIN_VERSION`` config option to declare the minimum Odoo series
+  for which the main branch bot actions runs. (`#252 <https://github.com/oca/oca-github-bot/issues/252>`_)
+- Upgrade to latest ``maintainer-tools``, and use ``oca-gen-addon-readme
+  --if-source-changed`` to avoid full regenaration of all readme when we upgrade
+  the README generator. (`#256 <https://github.com/oca/oca-github-bot/issues/256>`_)
+
+
+**Bugfixes**
+
+- Add binutils to Dockerfile to fix pandoc installer. (`#259 <https://github.com/oca/oca-github-bot/issues/259>`_)
+
+
+v20230619
+~~~~~~~~~
+
+**Bugfixes**
+
+- Fix merge command regression introduced in previous release. (`#246 <https://github.com/oca/oca-github-bot/issues/246>`_)
+- Sanity check the virtual environment used to build wheels.
+
+v20230617.1
+~~~~~~~~~~~
+
+**Bugfixes**
+
+- Fix issue where some command errors where not reported as comments on the PR. (`#244 <https://github.com/oca/oca-github-bot/issues/244>`_)
+
+
+v20230617
+~~~~~~~~~
+
+**Bugfixes**
+
+- ``/ocabot migration``: Automaticaly check line in Migration issue when merging the according Pull Request. (`#192 <https://github.com/oca/oca-github-bot/issues/192>`_)
+- ``/ocabot migration``: A new migration PR can overwrite the PR in the migration issue only if the latter is closed. (`#218 <https://github.com/oca/oca-github-bot/issues/218>`_)
+
+v20221019
+~~~~~~~~~
+
+**Features**
+
+- When calling ``/ocabot migration`` if a previous Pull Request was referenced in the migration issue, post an alert on the new Pull Request to mention the previous work. (`#191 <https://github.com/oca/oca-github-bot/issues/191>`_)
+- Refactored wheel builder, adding support for ``pyproject.toml`` in addon directories,
+  towards removing ``setup`` directories. (`#212 <https://github.com/oca/oca-github-bot/issues/212>`_)
+- Update pinned dependencies. (`#213 <https://github.com/oca/oca-github-bot/issues/213>`_)
+
+
+**Bugfixes**
+
+- Search for addons maintainers in all the branches of the current repository. (`#183 <https://github.com/oca/oca-github-bot/issues/183>`_)
+- Make the command ``/ocabot migration`` working when migration issue doesn't contain migration module lines. (`#190 <https://github.com/oca/oca-github-bot/issues/190>`_)
+- Tweak /ocabot usage presentation. (`#199 <https://github.com/oca/oca-github-bot/issues/199>`_)
+
+
+v20220518
+~~~~~~~~~
+
+**Features**
+
+- Added support for Odoo 15 (via a setuptools-odoo and maintainer-tools update). (`#156 <https://github.com/oca/oca-github-bot/issues/156>`_)
+
+**Bugfixes**
+
+- Fixed the mention to maintainers on new pull requests. Also mention maintainers
+  when a PR is reopened. (`#166 <https://github.com/oca/oca-github-bot/issues/166>`_)
+- Try to avoid git fetch lock issues and sentry alerts pollution by retrying
+  automatically. (`#177 <https://github.com/oca/oca-github-bot/issues/177>`_)
+- Reduce error noise by suppressing BranchNotFoundError in then merge branch status
+  handler. (`#178 <https://github.com/oca/oca-github-bot/issues/178>`_)
+- Consider comment made when reviewing Pull request. It so allow users
+  to review and launch commands in a single action. (`#182 <https://github.com/oca/oca-github-bot/issues/182>`_)
+
+**Misc**
+
+- Update dependencies, drop support for python 3.6 and 3.7. Test with python 3.10. `#175
+  <https://github.com/oca/oca-github-bot/issues/175>`_
+
+
 v20211206
 ~~~~~~~~~
 

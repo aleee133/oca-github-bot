@@ -1,6 +1,5 @@
 # Copyright 2019 Simone Rubino - Agile Business Group
 # Distributed under the MIT License (http://opensource.org/licenses/MIT).
-from pathlib import Path
 
 from .. import config, github
 from ..config import switchable
@@ -34,7 +33,7 @@ def mention_maintainer(org, repo, pr, dry_run=False):
                 cwd=clonedir,
             )
             check_call(["git", "checkout", pr_branch], cwd=clonedir)
-            modified_addon_dirs, _ = git_modified_addon_dirs(clonedir, target_branch)
+            modified_addon_dirs, _, _ = git_modified_addon_dirs(clonedir, target_branch)
 
             # Remove not installable addons
             # (case where an addon becomes no more installable).
@@ -87,10 +86,10 @@ def get_adopt_mention(pr_opener):
 def get_maintainers(addon_dirs):
     """Get maintainer for each addon in `addon_dirs`.
 
-    :return: Dictionary {Path('addon_dir'): <list of addon's maintainers>}
+    :return: Dictionary {'addon_dir': <list of addon's maintainers>}
     """
     addon_maintainers_dict = dict()
     for addon_dir in addon_dirs:
         maintainers = get_manifest(addon_dir).get("maintainers", [])
-        addon_maintainers_dict.setdefault(Path(addon_dir), maintainers)
+        addon_maintainers_dict.setdefault(addon_dir, maintainers)
     return addon_maintainers_dict

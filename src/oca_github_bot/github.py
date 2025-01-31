@@ -1,11 +1,13 @@
 # Copyright (c) ACSONE SA/NV 2018-2019
 # Distributed under the MIT License (http://opensource.org/licenses/MIT).
 
+import functools
 import logging
 import os
 import shutil
 import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 
 import appdirs
 import github3
@@ -13,6 +15,7 @@ from celery.exceptions import Retry
 
 from . import config
 from .process import CalledProcessError, call, check_call, check_output
+from .utils import retry_on_exception
 
 _logger = logging.getLogger(__name__)
 
@@ -77,7 +80,11 @@ def temporary_clone(org, repo, branch):
         repo_url,
         "refs/heads/*:refs/heads/*",
     ]
-    check_call(fetch_cmd, cwd=repo_cache_dir)
+    retry_on_exception(
+        functools.partial(check_call, fetch_cmd, cwd=repo_cache_dir),
+        "error: cannot lock ref",
+        sleep_time=10.0,
+    )
     # check if branch exist
     branches = check_output(["git", "branch"], cwd=repo_cache_dir)
     branches = [b.strip() for b in branches.split()]
@@ -147,9 +154,19 @@ def github_user_can_push(gh_repo, username):
 
 
 def git_get_head_sha(cwd):
-    """ Get the sha of the git HEAD in current directory """
+    """Get the sha of the git HEAD in current directory"""
     return check_output(["git", "rev-parse", "HEAD"], cwd=cwd).strip()
 
 
 def git_get_current_branch(cwd):
     return check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd).strip()
+
+
+def git_commit_if_needed(glob_pattern, msg, cwd):
+    files = [p.absolute() for p in Path(cwd).glob(glob_pattern)]
+    if not files:
+        return  # no match nothing to commit
+    check_call(["git", "add", *files], cwd=cwd)
+    if call(["git", "diff", "--cached", "--quiet", "--exit-code"], cwd=cwd) == 0:
+        return  # nothing added
+    return check_call(["git", "commit", "-m", msg], cwd=cwd)

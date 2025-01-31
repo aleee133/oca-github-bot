@@ -3,6 +3,10 @@
 
 import re
 
+from packaging import version
+
+from . import config
+
 ODOO_VERSION_RE = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)$")
 MERGE_BOT_BRANCH_RE = re.compile(
     r"(?P<target_branch>\S+)"
@@ -13,11 +17,19 @@ MERGE_BOT_BRANCH_RE = re.compile(
 )
 
 
-def is_main_branch_bot_branch(branch_name):
-    mo = ODOO_VERSION_RE.match(branch_name)
-    if not mo:
+def is_supported_main_branch(branch_name, min_version=None):
+    if not ODOO_VERSION_RE.match(branch_name):
         return False
-    return int(mo.group("major")) >= 8
+    branch_version = version.parse(branch_name)
+    if min_version and branch_version < version.parse(min_version):
+        return False
+    return True
+
+
+def is_main_branch_bot_branch(branch_name):
+    return is_supported_main_branch(
+        branch_name, min_version=config.MAIN_BRANCH_BOT_MIN_VERSION
+    )
 
 
 def is_protected_branch(branch_name):
